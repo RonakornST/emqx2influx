@@ -1,0 +1,52 @@
+services:
+  emqx:
+    image: emqx/emqx:5.4.1
+    ports:
+      - "1883:1883"
+      - "18083:18083" # dashboard
+    environment:
+      - EMQX_ADMIN_USERNAME=admin
+      - EMQX_ADMIN_PASSWORD=password123  # It will have to be public for the first time you run the container. After that, you can change it.
+    networks:
+      - iot-net
+    healthcheck:
+      test: ["CMD", "emqx_ctl", "status"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+
+  influxdb:
+    image: influxdb:2.7
+    ports:
+      - "8086:8086"
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=password123
+      - DOCKER_INFLUXDB_INIT_ORG=my-org
+      - DOCKER_INFLUXDB_INIT_BUCKET=my-bucket
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=my-secret-token
+    networks:
+      - iot-net
+
+  mqtt_publisher:
+    build: ./mqtt_pub
+    depends_on:
+      emqx:
+        condition: service_healthy  # Only start after emqx is healthy
+    networks:
+      - iot-net
+
+  mqtt_to_influx:
+    build: ./mqtt_to_influx
+    depends_on:
+      emqx:
+        condition: service_healthy
+      influxdb:
+        condition: service_started
+    networks:
+      - iot-net
+
+networks:
+  iot-net:
+    driver: bridge
